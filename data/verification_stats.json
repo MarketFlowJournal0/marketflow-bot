@@ -1,0 +1,22 @@
+{
+  "sources": {
+    "Friend": 1,
+    "Twitter": 1
+  },
+  "trader_types": {
+    "Débutant": 1,
+    "Beginner": 1
+  },
+  "total": 2,
+  "raw": [
+    {
+      "id": 622815901208674324,
+      "name": "rbz.fx",
+      "source": "x",
+      "source_normalized": "Twitter",
+      "trader_type": "debutant",
+      "trader_normalized": "Beginner",
+      "date": "2026-03-17 15:58 UTC"
+    }
+  ]
+}

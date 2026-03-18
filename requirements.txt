@@ -1,0 +1,7 @@
+discord.py
+python-dotenv
+aiohttp
+Pillow
+pytz
+beautifulsoup4
+requests
