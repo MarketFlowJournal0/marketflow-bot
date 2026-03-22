@@ -90,7 +90,7 @@ def generate_captcha_image(code: str) -> io.BytesIO:
 
     for char in code:
         color = random.choice(colors)
-        y_offset = random.randint(10, 30)
+cha        y_offset = random.randint(10, 30)
         char_img = Image.new('RGBA', (65, 80), (0, 0, 0, 0))
         char_draw = ImageDraw.Draw(char_img)
         char_draw.text((5, 0), char, font=font, fill=color)
@@ -537,17 +537,14 @@ class Verification(commands.Cog):
             )
             return
 
-        await interaction.response.defer(ephemeral=True)
+        try:
+            stats = load_stats()
+        except:
+            stats = {'sources': {}, 'trader_types': {}, 'total': 0}
 
-        stats = load_stats()
-
-        if stats['total'] == 0:
-            await interaction.followup.send('📊 No verification data yet.', ephemeral=True)
-            return
-
+        total = stats['total']
         sources = stats.get('sources', {})
         traders = stats.get('trader_types', {})
-        total = stats['total']
 
         def build_bars(data: dict) -> str:
             if not data:
@@ -555,41 +552,34 @@ class Verification(commands.Cog):
             items = sorted(data.items(), key=lambda x: x[1], reverse=True)
             lines = []
             for label, value in items:
-                pct = round((value / total) * 100, 1)
+                pct = round((value / total) * 100, 1) if total > 0 else 0
                 filled = int(pct / 5)
                 bar = '█' * filled + '░' * (20 - filled)
                 lines.append(f'`{label[:15]:<15}` {bar} **{value}** ({pct}%)')
-            return '\n'.join(lines)
+            return '\n'.join(lines) if lines else '`No data yet`'
 
         embed = discord.Embed(
             title='📊 MarketFlow Journal — Community Stats',
             color=0x00d4a8
         )
-        embed.add_field(
-            name=f'👥 Total Members — **{total}**',
-            value='\u200b',
-            inline=False
-        )
-        embed.add_field(
-            name='🔍 How they found us',
-            value=build_bars(sources),
-            inline=False
-        )
-        embed.add_field(
-            name='📈 Trader experience',
-            value=build_bars(traders),
-            inline=False
-        )
+        embed.add_field(name=f'👥 Total Members — **{total}**', value='\u200b', inline=False)
+        embed.add_field(name='🔍 How they found us', value=build_bars(sources), inline=False)
+        embed.add_field(name='📈 Trader experience', value=build_bars(traders), inline=False)
         embed.set_footer(text=f'MarketFlow Journal — {datetime.utcnow().strftime("%b %d at %H:%M UTC")}')
 
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        # Poste aussi dans le salon stats
-        stats_channel_id = int(os.getenv('STATS_CHANNEL_ID', 0))
-        if stats_channel_id:
-            stats_channel = interaction.guild.get_channel(stats_channel_id)
-            if stats_channel:
-                await stats_channel.send(embed=embed)
+        async def post_to_stats_channel():
+            try:
+                stats_channel_id = int(os.getenv('STATS_CHANNEL_ID', 0))
+                if stats_channel_id:
+                    stats_channel = interaction.guild.get_channel(stats_channel_id)
+                    if stats_channel:
+                        await stats_channel.send(embed=embed)
+            except Exception as e:
+                print(f'❌ Stats channel error: {e}')
+
+        asyncio.ensure_future(post_to_stats_channel())
 
     @app_commands.command(name='reset_stats', description='Réinitialise toutes les stats')
     async def reset_stats(self, interaction: discord.Interaction):
