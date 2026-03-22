@@ -90,7 +90,7 @@ def generate_captcha_image(code: str) -> io.BytesIO:
 
     for char in code:
         color = random.choice(colors)
-cha        y_offset = random.randint(10, 30)
+        y_offset = random.randint(10, 30)
         char_img = Image.new('RGBA', (65, 80), (0, 0, 0, 0))
         char_draw = ImageDraw.Draw(char_img)
         char_draw.text((5, 0), char, font=font, fill=color)
@@ -537,6 +537,7 @@ class Verification(commands.Cog):
             )
             return
 
+        # Charge AVANT de répondre
         try:
             stats = load_stats()
         except:
@@ -567,9 +568,11 @@ class Verification(commands.Cog):
         embed.add_field(name='📈 Trader experience', value=build_bars(traders), inline=False)
         embed.set_footer(text=f'MarketFlow Journal — {datetime.utcnow().strftime("%b %d at %H:%M UTC")}')
 
+        # Répond IMMÉDIATEMENT sans defer
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        async def post_to_stats_channel():
+        # Poste dans salon stats en arrière-plan
+        async def post_to_stats():
             try:
                 stats_channel_id = int(os.getenv('STATS_CHANNEL_ID', 0))
                 if stats_channel_id:
@@ -579,7 +582,7 @@ class Verification(commands.Cog):
             except Exception as e:
                 print(f'❌ Stats channel error: {e}')
 
-        asyncio.ensure_future(post_to_stats_channel())
+        asyncio.ensure_future(post_to_stats())
 
     @app_commands.command(name='reset_stats', description='Réinitialise toutes les stats')
     async def reset_stats(self, interaction: discord.Interaction):
