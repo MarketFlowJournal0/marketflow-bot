@@ -119,83 +119,6 @@ def generate_captcha_image(code: str) -> io.BytesIO:
     return buffer
 
 
-def generate_stats_image(stats: dict) -> io.BytesIO:
-    width, height = 800, 500
-    bg_color = (13, 17, 23)
-    img = Image.new('RGB', (width, height), color=bg_color)
-    draw = ImageDraw.Draw(img)
-
-    try:
-        font_big = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
-        font_med = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 16)
-        font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 13)
-    except:
-        font_big = ImageFont.load_default()
-        font_med = font_big
-        font_small = font_big
-
-    palette = [
-        (0, 212, 168), (245, 158, 11), (239, 68, 68),
-        (99, 102, 241), (236, 72, 153), (16, 185, 129),
-        (251, 191, 36), (59, 130, 246), (167, 139, 250),
-        (248, 113, 113),
-    ]
-
-    # Titre
-    draw.text((width//2, 30), 'MarketFlow Journal — Community Stats',
-              font=font_big, fill=(0, 212, 168), anchor='mm')
-    draw.text((width//2, 58), f'Total verified members: {stats["total"]}',
-              font=font_med, fill=(180, 180, 180), anchor='mm')
-    draw.line([(40, 72), (width-40, 72)], fill=(0, 212, 168), width=1)
-
-    def draw_bars(x, y, w, data_dict, title, color_offset=0):
-        draw.text((x + w//2, y), title, font=font_med, fill=(255, 255, 255), anchor='mm')
-        y += 25
-        if not data_dict:
-            draw.text((x + w//2, y + 30), 'No data yet',
-                     font=font_small, fill=(120, 120, 140), anchor='mm')
-            return
-
-        total = sum(data_dict.values())
-        items = sorted(data_dict.items(), key=lambda x: x[1], reverse=True)[:8]
-        bar_h = 22
-        gap = 8
-
-        for i, (label, value) in enumerate(items):
-            color = palette[(i + color_offset) % len(palette)]
-            pct = value / total
-            bar_w = int(pct * (w - 120))
-
-            draw.rectangle(
-                [x + 110, y + i*(bar_h+gap),
-                 x + 110 + max(bar_w, 4), y + i*(bar_h+gap) + bar_h],
-                fill=color
-            )
-
-            label_short = label[:14] if len(label) > 14 else label
-            draw.text((x + 105, y + i*(bar_h+gap) + bar_h//2),
-                     label_short, font=font_small, fill=(220, 220, 220), anchor='rm')
-
-            draw.text((x + 115 + max(bar_w, 4) + 5, y + i*(bar_h+gap) + bar_h//2),
-                     f'{value} ({round(pct*100, 1)}%)',
-                     font=font_small, fill=(180, 180, 180), anchor='lm')
-
-    draw_bars(40, 95, 340, stats.get('sources', {}), 'How they found us', 0)
-    draw.line([(width//2, 80), (width//2, height-30)], fill=(25, 32, 42), width=1)
-    draw_bars(width//2 + 20, 95, 340, stats.get('trader_types', {}), 'Trader experience', 4)
-
-    draw.line([(40, height-28), (width-40, height-28)], fill=(0, 212, 168), width=1)
-    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
-    draw.text((width//2, height-14),
-              f'Generated {now} • MarketFlow Journal',
-              font=font_small, fill=(80, 85, 100), anchor='mm')
-
-    buffer = io.BytesIO()
-    img.save(buffer, format='PNG')
-    buffer.seek(0)
-    return buffer
-
-
 def get_user_data(user_id):
     if user_id not in verification_attempts:
         verification_attempts[user_id] = {
@@ -468,7 +391,7 @@ class VerificationView(discord.ui.View):
         user_id = interaction.user.id
         guild = interaction.guild
 
-        membre_role = discord.utils.get(guild.roles, name='MFJ Membre')
+        membre_role = discord.utils.get(guild.roles, name='MFJ Member')
         if membre_role and membre_role in interaction.user.roles:
             await interaction.response.send_message('✅ You are already a member!', ephemeral=True)
             return
@@ -622,34 +545,51 @@ class Verification(commands.Cog):
             await interaction.followup.send('📊 No verification data yet.', ephemeral=True)
             return
 
-        loop = asyncio.get_event_loop()
-        stats_buffer = await loop.run_in_executor(None, generate_stats_image, stats)
-        file = discord.File(stats_buffer, filename='stats.png')
+        sources = stats.get('sources', {})
+        traders = stats.get('trader_types', {})
+        total = stats['total']
+
+        def build_bars(data: dict) -> str:
+            if not data:
+                return '`No data yet`'
+            items = sorted(data.items(), key=lambda x: x[1], reverse=True)
+            lines = []
+            for label, value in items:
+                pct = round((value / total) * 100, 1)
+                filled = int(pct / 5)
+                bar = '█' * filled + '░' * (20 - filled)
+                lines.append(f'`{label[:15]:<15}` {bar} **{value}** ({pct}%)')
+            return '\n'.join(lines)
 
         embed = discord.Embed(
-            title='📊 MarketFlow Journal — Verification Stats',
-            description=f'**{stats["total"]}** total verified members',
+            title='📊 MarketFlow Journal — Community Stats',
             color=0x00d4a8
         )
-        embed.set_image(url='attachment://stats.png')
-        embed.set_footer(text='MarketFlow Journal — Staff Only • /reset_stats to clear')
-        await interaction.followup.send(embed=embed, file=file, ephemeral=True)
+        embed.add_field(
+            name=f'👥 Total Members — **{total}**',
+            value='\u200b',
+            inline=False
+        )
+        embed.add_field(
+            name='🔍 How they found us',
+            value=build_bars(sources),
+            inline=False
+        )
+        embed.add_field(
+            name='📈 Trader experience',
+            value=build_bars(traders),
+            inline=False
+        )
+        embed.set_footer(text=f'MarketFlow Journal — {datetime.utcnow().strftime("%b %d at %H:%M UTC")}')
 
-        # Poste aussi dans le salon stats staff
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+        # Poste aussi dans le salon stats
         stats_channel_id = int(os.getenv('STATS_CHANNEL_ID', 0))
         if stats_channel_id:
             stats_channel = interaction.guild.get_channel(stats_channel_id)
             if stats_channel:
-                stats_buffer2 = await loop.run_in_executor(None, generate_stats_image, stats)
-                file2 = discord.File(stats_buffer2, filename='stats.png')
-                embed2 = discord.Embed(
-                    title='📊 MarketFlow Journal — Verification Stats',
-                    description=f'**{stats["total"]}** total verified members',
-                    color=0x00d4a8
-                )
-                embed2.set_image(url='attachment://stats.png')
-                embed2.set_footer(text=f'MarketFlow Journal — {datetime.utcnow().strftime("%b %d at %H:%M UTC")}')
-                await stats_channel.send(embed=embed2, file=file2)
+                await stats_channel.send(embed=embed)
 
     @app_commands.command(name='reset_stats', description='Réinitialise toutes les stats')
     async def reset_stats(self, interaction: discord.Interaction):
