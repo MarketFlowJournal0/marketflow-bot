@@ -12,6 +12,7 @@ def is_owner(user_id: int) -> bool:
 def is_staff(member: discord.Member) -> bool:
     return is_owner(member.id) or any(r.name == 'MFJ Teams' for r in member.roles)
 
+
 class AcceptRulesView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -25,9 +26,10 @@ class AcceptRulesView(discord.ui.View):
         guild = interaction.guild
         member = interaction.user
 
-        membre_role = discord.utils.get(guild.roles, name='MFJ Membre')
+        membre_role = discord.utils.get(guild.roles, name='MFJ Member')
         verif_role = discord.utils.get(guild.roles, name='MFJ Verification')
 
+        # Déjà membre
         if membre_role and membre_role in member.roles:
             await interaction.response.send_message(
                 '✅ You are already a full member!',
@@ -35,6 +37,7 @@ class AcceptRulesView(discord.ui.View):
             )
             return
 
+        # Répond IMMÉDIATEMENT
         embed_confirm = discord.Embed(
             title='🎉 Welcome to MarketFlow Journal!',
             description=(
@@ -48,13 +51,21 @@ class AcceptRulesView(discord.ui.View):
         embed_confirm.set_footer(text='MarketFlow Journal — Trading Journal')
         await interaction.response.send_message(embed=embed_confirm, ephemeral=True)
 
+        # Arrière-plan
         async def background():
             try:
+                # Retire MFJ Verification
                 if verif_role and verif_role in member.roles:
                     await member.remove_roles(verif_role)
+
+                # Assigne MFJ Member
                 if membre_role:
                     await member.add_roles(membre_role)
+                    print(f'✅ Rôle MFJ Member assigné à {member}')
+                else:
+                    print(f'❌ Rôle MFJ Member introuvable !')
 
+                # Log staff
                 if _log_channel:
                     embed_log = discord.Embed(title='✅ New Member', color=0x00d4a8)
                     embed_log.add_field(name='Member', value=f'{member.mention} (`{member.id}`)', inline=False)
@@ -62,6 +73,7 @@ class AcceptRulesView(discord.ui.View):
                     embed_log.set_footer(text='MarketFlow Journal — Verification System')
                     await _log_channel.send(embed=embed_log)
 
+                # DM de bienvenue
                 try:
                     embed_dm = discord.Embed(
                         title='👋 Welcome to MarketFlow Journal!',
