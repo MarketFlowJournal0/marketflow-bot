@@ -25,12 +25,12 @@ def load_stats():
     os.makedirs('data', exist_ok=True)
     if not os.path.exists(STATS_FILE):
         return {'sources': {}, 'trader_types': {}, 'total': 0, 'raw': []}
-    with open(STATS_FILE, 'r') as f:
+    with open(STATS_FILE, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 def save_stats(data):
     os.makedirs('data', exist_ok=True)
-    with open(STATS_FILE, 'w') as f:
+    with open(STATS_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 def add_stat(source: str, trader_type: str, member_id: int, member_name: str):
