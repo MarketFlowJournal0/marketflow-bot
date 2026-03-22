@@ -51,53 +51,80 @@ def add_stat(source: str, trader_type: str, member_id: int, member_name: str):
 
 def generate_code():
     chars = 'ABCDEFGHJKLMNPQRTUVWXYZ2346789'
-    return ''.join(random.choices(chars, k=6))
+    return ''.join(random.choices(chars, k=5))
 
 def generate_captcha_image(code: str) -> io.BytesIO:
-    width, height = 320, 100
+    width, height = 380, 120
     img = Image.new('RGB', (width, height), color=(13, 17, 23))
     draw = ImageDraw.Draw(img)
 
-    for _ in range(8):
+    # Lignes de bruit
+    for _ in range(6):
         x1 = random.randint(0, width)
         y1 = random.randint(0, height)
         x2 = random.randint(0, width)
         y2 = random.randint(0, height)
-        color = random.choice([(0, 212, 168), (245, 158, 11), (100, 100, 120)])
+        color = random.choice([(0, 212, 168), (245, 158, 11), (80, 80, 100)])
         draw.line([(x1, y1), (x2, y2)], fill=color, width=1)
 
-    for _ in range(200):
+    # Points de bruit
+    for _ in range(150):
         x = random.randint(0, width)
         y = random.randint(0, height)
         draw.point((x, y), fill=(0, 212, 168))
 
+    # Police grande et lisible
     try:
-        font = ImageFont.truetype("arial.ttf", 48)
+        font = ImageFont.truetype("arial.ttf", 62)
     except:
-        font = ImageFont.load_default()
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 62)
+        except:
+            font = ImageFont.load_default()
 
-    colors = [(0, 212, 168), (245, 158, 11), (255, 255, 255), (0, 180, 140)]
-    x_offset = 20
+    colors = [
+        (0, 212, 168),
+        (245, 158, 11),
+        (255, 255, 255),
+        (0, 200, 150),
+        (255, 220, 50),
+    ]
+
+    # Centre les caractères
+    total_width = len(code) * 68
+    x_start = (width - total_width) // 2 + 10
+
+    x_offset = x_start
     for char in code:
         color = random.choice(colors)
-        y_offset = random.randint(15, 35)
-        char_img = Image.new('RGBA', (50, 70), (0, 0, 0, 0))
+        y_offset = random.randint(10, 30)
+
+        char_img = Image.new('RGBA', (65, 80), (0, 0, 0, 0))
         char_draw = ImageDraw.Draw(char_img)
-        char_draw.text((5, 5), char, font=font, fill=color)
-        angle = random.randint(-25, 25)
+        char_draw.text((5, 0), char, font=font, fill=color)
+
+        # Rotation légère
+        angle = random.randint(-15, 15)
         char_img = char_img.rotate(angle, expand=True)
         img.paste(char_img, (x_offset, y_offset), char_img)
-        x_offset += 45
+        x_offset += 68
 
     img = img.filter(ImageFilter.SMOOTH)
     draw = ImageDraw.Draw(img)
+
+    # Bordure cyan
     draw.rectangle([(0, 0), (width-1, height-1)], outline=(0, 212, 168), width=2)
 
+    # Watermark
     try:
         small_font = ImageFont.truetype("arial.ttf", 11)
     except:
-        small_font = ImageFont.load_default()
-    draw.text((5, height-18), 'MarketFlow Journal', font=small_font, fill=(0, 212, 168))
+        try:
+            small_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 11)
+        except:
+            small_font = ImageFont.load_default()
+
+    draw.text((6, height-16), 'MarketFlow Journal', font=small_font, fill=(0, 212, 168))
 
     buffer = io.BytesIO()
     img.save(buffer, format='PNG')
@@ -125,11 +152,18 @@ def generate_stats_image(stats: dict) -> io.BytesIO:
         font_big = ImageFont.truetype("arial.ttf", 32)
         font_medium = ImageFont.truetype("arial.ttf", 18)
     except:
-        font_title = ImageFont.load_default()
-        font_label = font_title
-        font_small = font_title
-        font_big = font_title
-        font_medium = font_title
+        try:
+            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 22)
+            font_label = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
+            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 12)
+            font_big = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 32)
+            font_medium = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
+        except:
+            font_title = ImageFont.load_default()
+            font_label = font_title
+            font_small = font_title
+            font_big = font_title
+            font_medium = font_title
 
     draw.text((width//2, 28), 'MarketFlow Journal — Community Stats',
               font=font_big, fill=(0, 212, 168), anchor='mm')
@@ -227,6 +261,7 @@ async def log_action(embed: discord.Embed):
             pass
 
 
+# ETAPE 3 — BOUTONS TYPE DE TRADER
 class TraderTypeView(discord.ui.View):
     def __init__(self, user_id: int, source: str):
         super().__init__(timeout=300)
@@ -243,22 +278,34 @@ class TraderTypeView(discord.ui.View):
         member = interaction.user
         rules_mention = _rules_mention or '#rules'
 
+        # Répond instantanément
         embed = discord.Embed(
             title='✅ Almost there!',
-            description=f'Head over to {rules_mention}, read and accept the rules to unlock the full server.',
+            description=(
+                f'Head over to {rules_mention} 📜\n\n'
+                'Read and accept the rules to unlock the full server.\n'
+                '**One last step!**'
+            ),
             color=0x00d4a8
         )
-        embed.set_footer(text='MarketFlow Journal — One last step!')
+        embed.set_footer(text='MarketFlow Journal — Verification System')
         await interaction.response.edit_message(embed=embed, view=None)
 
+        # Arrière-plan
         async def background():
             try:
+                # Assigne MFJ Verification
                 verif_role = discord.utils.get(guild.roles, name='MFJ Verification')
                 if verif_role:
                     await member.add_roles(verif_role)
+                else:
+                    print('❌ Rôle MFJ Verification introuvable !')
+
                 add_stat(self.source, trader_type, member.id, str(member))
+
                 if self.user_id in verification_attempts:
                     del verification_attempts[self.user_id]
+
                 embed_log = discord.Embed(title='🔐 Captcha Verified — Pending Rules', color=0xf59e0b)
                 embed_log.add_field(name='Member', value=f'{member.mention} (`{member.id}`)', inline=False)
                 embed_log.add_field(name='How they found us', value=self.source, inline=False)
@@ -292,6 +339,7 @@ class TraderTypeView(discord.ui.View):
         await self.handle_trader(interaction, 'Other')
 
 
+# ETAPE 2 — BOUTONS SOURCE
 class SourceView(discord.ui.View):
     def __init__(self, user_id: int):
         super().__init__(timeout=300)
@@ -355,16 +403,17 @@ class SourceView(discord.ui.View):
         await self.handle_source(interaction, 'Other')
 
 
+# ETAPE 1B — MODAL CODE CAPTCHA
 class CaptchaCodeModal(discord.ui.Modal, title='MarketFlow Journal — Enter Code'):
     def __init__(self, code: str):
         super().__init__()
         self.code = code
         self.captcha_input = discord.ui.TextInput(
-            label='Enter the 6-character code',
+            label='Enter the 5-character code',
             placeholder='Uppercase or lowercase, both work...',
             required=True,
-            max_length=6,
-            min_length=6
+            max_length=5,
+            min_length=5
         )
         self.add_item(self.captcha_input)
 
@@ -409,6 +458,7 @@ class CaptchaCodeModal(discord.ui.Modal, title='MarketFlow Journal — Enter Cod
                 )
             return
 
+        # ✅ Captcha réussi → questions marketing
         data['captcha_done'] = True
         data['code'] = None
 
@@ -425,6 +475,7 @@ class CaptchaCodeModal(discord.ui.Modal, title='MarketFlow Journal — Enter Cod
         )
 
 
+# ETAPE 1A — BOUTON ENTER CODE
 class CaptchaAnswerView(discord.ui.View):
     def __init__(self, code: str):
         super().__init__(timeout=300)
@@ -456,6 +507,7 @@ class CaptchaAnswerView(discord.ui.View):
         await interaction.response.send_modal(CaptchaCodeModal(code=self.code))
 
 
+# BOUTON START VERIFICATION
 class VerificationView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -511,7 +563,7 @@ class VerificationView(discord.ui.View):
             title='🔐 Captcha Verification',
             description=(
                 'Look at the image carefully.\n'
-                'Click **"Enter the code →"** and type the **6 characters** exactly.\n'
+                'Click **"Enter the code →"** and type the **5 characters** exactly.\n'
                 '*(uppercase or lowercase, both work)*\n\n'
                 '⚠️ **3 attempts max — 5 min cooldown if exceeded**'
             ),
