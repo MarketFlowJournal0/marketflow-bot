@@ -58,7 +58,6 @@ def generate_captcha_image(code: str) -> io.BytesIO:
     img = Image.new('RGB', (width, height), color=(13, 17, 23))
     draw = ImageDraw.Draw(img)
 
-    # Lignes de bruit
     for _ in range(6):
         x1 = random.randint(0, width)
         y1 = random.randint(0, height)
@@ -67,13 +66,11 @@ def generate_captcha_image(code: str) -> io.BytesIO:
         color = random.choice([(0, 212, 168), (245, 158, 11), (80, 80, 100)])
         draw.line([(x1, y1), (x2, y2)], fill=color, width=1)
 
-    # Points de bruit
     for _ in range(150):
         x = random.randint(0, width)
         y = random.randint(0, height)
         draw.point((x, y), fill=(0, 212, 168))
 
-    # Police grande et lisible
     try:
         font = ImageFont.truetype("arial.ttf", 62)
     except:
@@ -83,27 +80,20 @@ def generate_captcha_image(code: str) -> io.BytesIO:
             font = ImageFont.load_default()
 
     colors = [
-        (0, 212, 168),
-        (245, 158, 11),
-        (255, 255, 255),
-        (0, 200, 150),
-        (255, 220, 50),
+        (0, 212, 168), (245, 158, 11), (255, 255, 255),
+        (0, 200, 150), (255, 220, 50),
     ]
 
-    # Centre les caractères
     total_width = len(code) * 68
     x_start = (width - total_width) // 2 + 10
-
     x_offset = x_start
+
     for char in code:
         color = random.choice(colors)
         y_offset = random.randint(10, 30)
-
         char_img = Image.new('RGBA', (65, 80), (0, 0, 0, 0))
         char_draw = ImageDraw.Draw(char_img)
         char_draw.text((5, 0), char, font=font, fill=color)
-
-        # Rotation légère
         angle = random.randint(-15, 15)
         char_img = char_img.rotate(angle, expand=True)
         img.paste(char_img, (x_offset, y_offset), char_img)
@@ -111,11 +101,8 @@ def generate_captcha_image(code: str) -> io.BytesIO:
 
     img = img.filter(ImageFilter.SMOOTH)
     draw = ImageDraw.Draw(img)
-
-    # Bordure cyan
     draw.rectangle([(0, 0), (width-1, height-1)], outline=(0, 212, 168), width=2)
 
-    # Watermark
     try:
         small_font = ImageFont.truetype("arial.ttf", 11)
     except:
@@ -261,7 +248,6 @@ async def log_action(embed: discord.Embed):
             pass
 
 
-# ETAPE 3 — BOUTONS TYPE DE TRADER
 class TraderTypeView(discord.ui.View):
     def __init__(self, user_id: int, source: str):
         super().__init__(timeout=300)
@@ -278,7 +264,6 @@ class TraderTypeView(discord.ui.View):
         member = interaction.user
         rules_mention = _rules_mention or '#rules'
 
-        # Répond instantanément
         embed = discord.Embed(
             title='✅ Almost there!',
             description=(
@@ -291,10 +276,8 @@ class TraderTypeView(discord.ui.View):
         embed.set_footer(text='MarketFlow Journal — Verification System')
         await interaction.response.edit_message(embed=embed, view=None)
 
-        # Arrière-plan
         async def background():
             try:
-                # Assigne MFJ Verification
                 verif_role = discord.utils.get(guild.roles, name='MFJ Verification')
                 if verif_role:
                     await member.add_roles(verif_role)
@@ -339,7 +322,6 @@ class TraderTypeView(discord.ui.View):
         await self.handle_trader(interaction, 'Other')
 
 
-# ETAPE 2 — BOUTONS SOURCE
 class SourceView(discord.ui.View):
     def __init__(self, user_id: int):
         super().__init__(timeout=300)
@@ -403,7 +385,6 @@ class SourceView(discord.ui.View):
         await self.handle_source(interaction, 'Other')
 
 
-# ETAPE 1B — MODAL CODE CAPTCHA
 class CaptchaCodeModal(discord.ui.Modal, title='MarketFlow Journal — Enter Code'):
     def __init__(self, code: str):
         super().__init__()
@@ -458,7 +439,6 @@ class CaptchaCodeModal(discord.ui.Modal, title='MarketFlow Journal — Enter Cod
                 )
             return
 
-        # ✅ Captcha réussi → questions marketing
         data['captcha_done'] = True
         data['code'] = None
 
@@ -475,7 +455,6 @@ class CaptchaCodeModal(discord.ui.Modal, title='MarketFlow Journal — Enter Cod
         )
 
 
-# ETAPE 1A — BOUTON ENTER CODE
 class CaptchaAnswerView(discord.ui.View):
     def __init__(self, code: str):
         super().__init__(timeout=300)
@@ -507,7 +486,6 @@ class CaptchaAnswerView(discord.ui.View):
         await interaction.response.send_modal(CaptchaCodeModal(code=self.code))
 
 
-# BOUTON START VERIFICATION
 class VerificationView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -667,14 +645,20 @@ class Verification(commands.Cog):
             )
             return
 
+        # Répond immédiatement
         await interaction.response.defer(ephemeral=True)
+
         stats = load_stats()
 
         if stats['total'] == 0:
             await interaction.followup.send('📊 No verification data yet.', ephemeral=True)
             return
 
-        stats_buffer = generate_stats_image(stats)
+        # Génère l'image en arrière-plan
+        stats_buffer = await asyncio.get_event_loop().run_in_executor(
+            None, generate_stats_image, stats
+        )
+
         file = discord.File(stats_buffer, filename='stats.png')
 
         embed = discord.Embed(
@@ -684,7 +668,26 @@ class Verification(commands.Cog):
         )
         embed.set_image(url='attachment://stats.png')
         embed.set_footer(text='MarketFlow Journal — Staff Only • /reset_stats to clear')
+
+        # Poste aussi dans le salon stats staff
+        stats_channel_id = int(os.getenv('STATS_CHANNEL_ID', 0))
+        stats_channel = interaction.guild.get_channel(stats_channel_id)
+
         await interaction.followup.send(embed=embed, file=file, ephemeral=True)
+
+        if stats_channel:
+            stats_buffer2 = await asyncio.get_event_loop().run_in_executor(
+                None, generate_stats_image, stats
+            )
+            file2 = discord.File(stats_buffer2, filename='stats.png')
+            embed2 = discord.Embed(
+                title='📊 MarketFlow Journal — Verification Stats',
+                description=f'**{stats["total"]}** total verified members',
+                color=0x00d4a8
+            )
+            embed2.set_image(url='attachment://stats.png')
+            embed2.set_footer(text=f'MarketFlow Journal — Generated {datetime.utcnow().strftime("%b %d at %H:%M UTC")}')
+            await stats_channel.send(embed=embed2, file=file2)
 
     @app_commands.command(name='reset_stats', description='Réinitialise toutes les stats')
     async def reset_stats(self, interaction: discord.Interaction):
