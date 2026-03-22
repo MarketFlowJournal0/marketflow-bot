@@ -31,8 +31,14 @@ DAY_COLORS = {
     'Wednesday': 0x00a381, 'Thursday': 0x00916e, 'Friday': 0x007f5c,
 }
 
-# Cache des messages postés pour mise à jour
-# Format: {day_name: message_id}
+# Keywords pour les grosses annonces
+BIG_EVENTS = [
+    'interest rate', 'rate decision', 'nfp', 'non-farm', 'nonfarm',
+    'cpi', 'inflation rate', 'fomc', 'fed', 'ecb', 'boe', 'boj', 'boc', 'rba', 'snb',
+    'gdp', 'unemployment', 'payroll'
+]
+
+# Cache messages du calendrier
 _calendar_messages = {}
 _last_events_data = {}
 
@@ -93,6 +99,7 @@ async def fetch_calendar_events() -> list:
 
 
 def parse_event_dt(event: dict) -> datetime | None:
+    """Parse datetime UTC → CET"""
     cet = pytz.timezone('Europe/Paris')
     try:
         date_str = event.get('date', '')
@@ -110,8 +117,19 @@ def parse_event_dt(event: dict) -> datetime | None:
     return None
 
 
+def is_big_event(title: str) -> bool:
+    """Vérifie si c'est une grosse annonce"""
+    title_lower = title.lower()
+    return any(kw in title_lower for kw in BIG_EVENTS)
+
+
+def fmt_val(v, u=''):
+    if v and str(v).strip():
+        return f'`{v}{u}`' if u else f'`{v}`'
+    return '`N/A`'
+
+
 def build_day_embed(day_name: str, day_events: list) -> discord.Embed:
-    """Construit l'embed pour un jour donné"""
     day_emoji = DAY_EMOJIS.get(day_name, '📆')
     date_display = day_events[0].get('_date_display', day_name)
     day_color = DAY_COLORS.get(day_name, 0x00d4a8)
@@ -132,12 +150,7 @@ def build_day_embed(day_name: str, day_events: list) -> discord.Embed:
         period = event.get('period', '')
         flag = CURRENCY_FLAGS.get(currency, '🌍')
 
-        def fmt_val(v, u=''):
-            if v and str(v).strip():
-                return f'`{v}{u}`' if u else f'`{v}`'
-            return '`N/A`'
-
-        # Direction si actual disponible
+        # Direction
         direction = ''
         if actual and forecast:
             try:
@@ -147,7 +160,7 @@ def build_day_embed(day_name: str, day_events: list) -> discord.Embed:
             except:
                 pass
 
-        # Status de l'event
+        # Status
         if actual and str(actual).strip():
             status = f'✅ **Actual:** {fmt_val(actual, unit)}{direction}'
         elif forecast and str(forecast).strip():
@@ -156,17 +169,20 @@ def build_day_embed(day_name: str, day_events: list) -> discord.Embed:
             status = '⏳ Awaiting data...'
 
         period_str = f' · `{period}`' if period else ''
+        big = '🔥 ' if is_big_event(title) else ''
 
         embed.add_field(
             name=f'🔴  {flag} {currency}  ·  `{time_str} CET`{period_str}',
             value=(
-                f'**{title}**\n'
+                f'{big}**{title}**\n'
                 f'{status}  ·  📈 Previous {fmt_val(previous, unit)}'
             ),
             inline=False
         )
 
-    embed.set_footer(text=f'🔴 High Impact · MarketFlow Journal · Updated {datetime.now(pytz.timezone("Europe/Paris")).strftime("%H:%M CET")}')
+    cet = pytz.timezone('Europe/Paris')
+    now = datetime.now(cet)
+    embed.set_footer(text=f'🔴 High Impact · MarketFlow Journal · Updated {now.strftime("%H:%M CET")}')
     return embed
 
 
@@ -225,13 +241,21 @@ async def post_weekly_calendar(channel: discord.TextChannel):
     currencies_week = sorted(set(e.get('currency', '') for e in week_events if e.get('currency')))
     currencies_display = '   '.join([f'{CURRENCY_FLAGS.get(c, "")} **{c}**' for c in currencies_week])
 
+    big_events_this_week = [e for e in week_events if is_big_event(e.get('title', ''))]
+
     header_embed.title = '📅 Economic Calendar — High Impact'
     header_embed.description = (
         f'**{monday.strftime("%B %d")} — {friday.strftime("%B %d, %Y")}**\n'
-        f'`{len(week_events)} events` · 🔴 High Impact Only · 🕐 CET (Paris)\n'
-        f'🔄 *Auto-updated every 5 minutes*\n\n'
+        f'`{len(week_events)} events` · 🔴 High Impact · 🕐 CET · 🔄 Auto-updated\n\n'
         f'{currencies_display}'
     )
+    if big_events_this_week:
+        big_titles = ', '.join(set(e.get('title', '') for e in big_events_this_week[:5]))
+        header_embed.add_field(
+            name='🔥 Major Events This Week',
+            value=big_titles,
+            inline=False
+        )
     header_embed.set_footer(text=f'Updated {now.strftime("%b %d at %H:%M CET")} • MarketFlow Journal')
     await channel.send(embed=header_embed)
     await asyncio.sleep(0.3)
@@ -244,7 +268,6 @@ async def post_weekly_calendar(channel: discord.TextChannel):
             days_dict[day] = []
         days_dict[day].append(event)
 
-    # Stocke les events pour mise à jour
     _last_events_data = days_dict
 
     for day_name in DAY_ORDER:
@@ -261,9 +284,10 @@ async def post_weekly_calendar(channel: discord.TextChannel):
     footer_embed = discord.Embed(color=0x0d1117)
     footer_embed.description = (
         '> ⚠️ **Risk Management** — Always protect your capital during high-impact releases.\n'
-        '> *Content is for educational purposes only and does not constitute financial advice.*'
+        '> *Content is for educational purposes only — not financial advice.*\n'
+        '> 🔥 = Major event (Rate Decision, CPI, NFP, GDP)'
     )
-    footer_embed.set_footer(text=f'MarketFlow Journal — Trading Journal · {now.strftime("%B %d, %Y")}')
+    footer_embed.set_footer(text=f'MarketFlow Journal · {now.strftime("%B %d, %Y")}')
     await channel.send(footer_embed)
 
     print(f'✅ Calendrier posté avec {len(_calendar_messages)} jours')
@@ -285,7 +309,6 @@ async def update_calendar_data(channel: discord.TextChannel):
     monday = now - timedelta(days=now.weekday())
     friday = monday + timedelta(days=4)
 
-    # Rebuild week events
     week_events = []
     for event in events:
         dt = parse_event_dt(event)
@@ -299,7 +322,6 @@ async def update_calendar_data(channel: discord.TextChannel):
     if not week_events:
         return
 
-    # Groupe par jour
     new_days = {}
     for event in week_events:
         day = event.get('_day', 'Unknown')
@@ -307,24 +329,27 @@ async def update_calendar_data(channel: discord.TextChannel):
             new_days[day] = []
         new_days[day].append(event)
 
-    # Compare et met à jour seulement si changement
     updated = 0
     for day_name, msg_id in _calendar_messages.items():
         if day_name not in new_days:
             continue
 
         new_events = sorted(new_days[day_name], key=lambda x: x.get('_time', '00:00'))
-        old_events = sorted(_last_events_data.get(day_name, []), key=lambda x: x.get('_time', '00:00'))
+        old_events = _last_events_data.get(day_name, [])
 
-        # Vérifie si les données ont changé
+        # Vérifie si données changées
         changed = False
         for new_e in new_events:
-            event_id = new_e.get('id', '')
             for old_e in old_events:
-                if old_e.get('id', '') == event_id:
+                if old_e.get('id', '') == new_e.get('id', ''):
                     if (new_e.get('actual') != old_e.get('actual') or
                             new_e.get('forecast') != old_e.get('forecast')):
                         changed = True
+
+                        # Envoie rappel si grosse annonce et actual vient d'arriver
+                        if (new_e.get('actual') and not old_e.get('actual') and
+                                is_big_event(new_e.get('title', ''))):
+                            await send_big_event_alert(channel, new_e)
                         break
 
         if changed:
@@ -333,14 +358,54 @@ async def update_calendar_data(channel: discord.TextChannel):
                 new_embed = build_day_embed(day_name, new_events)
                 await msg.edit(embed=new_embed)
                 updated += 1
-                print(f'🔄 Updated calendar: {day_name}')
+                print(f'🔄 Calendar updated: {day_name}')
             except Exception as e:
-                print(f'❌ Update error for {day_name}: {e}')
+                print(f'❌ Update error {day_name}: {e}')
 
     if updated > 0:
         print(f'✅ {updated} calendar message(s) updated')
 
     _last_events_data = new_days
+
+
+async def send_big_event_alert(channel: discord.TextChannel, event: dict):
+    """Envoie une alerte pour les grosses annonces"""
+    currency = event.get('currency', '?')
+    title = event.get('title', 'Unknown')
+    actual = event.get('actual', '—')
+    forecast = event.get('forecast') or '—'
+    previous = event.get('previous') or '—'
+    unit = event.get('unit', '')
+    flag = CURRENCY_FLAGS.get(currency, '🌍')
+
+    direction = ''
+    beat = ''
+    if actual and forecast and forecast != '—':
+        try:
+            def parse_val(v):
+                return float(str(v).replace('%', '').replace('K', '000').replace('M', '000000').strip())
+            if parse_val(actual) >= parse_val(forecast):
+                direction = '📈'
+                beat = '✅ **BEAT**'
+            else:
+                direction = '📉'
+                beat = '❌ **MISS**'
+        except:
+            pass
+
+    embed = discord.Embed(
+        title=f'🔥 MAJOR RELEASE — {flag} {currency}',
+        description=f'**{title}**',
+        color=0xef4444
+    )
+    embed.add_field(name=f'Actual {direction}', value=fmt_val(actual, unit), inline=True)
+    embed.add_field(name='Forecast', value=fmt_val(forecast, unit), inline=True)
+    embed.add_field(name='Previous', value=fmt_val(previous, unit), inline=True)
+    if beat:
+        embed.add_field(name='Result', value=beat, inline=False)
+
+    embed.set_footer(text=f'MarketFlow Journal — Economic Alert · {datetime.now(pytz.timezone("Europe/Paris")).strftime("%H:%M CET")}')
+    await channel.send(embed=embed)
 
 
 class Calendar(commands.Cog):
@@ -392,9 +457,9 @@ class Calendar(commands.Cog):
                 await asyncio.sleep(60)
 
     async def auto_update_loop(self):
-        """Met à jour le calendrier toutes les 5 minutes"""
+        """Met à jour toutes les 2 minutes"""
         await self.bot.wait_until_ready()
-        await asyncio.sleep(30)  # Attend 30s après le démarrage
+        await asyncio.sleep(60)
 
         while not self.bot.is_closed():
             try:
@@ -405,7 +470,7 @@ class Calendar(commands.Cog):
                     if channel:
                         await update_calendar_data(channel)
 
-                await asyncio.sleep(300)  # 5 minutes
+                await asyncio.sleep(120)  # 2 minutes
 
             except Exception as e:
                 print(f'❌ Auto-update error: {e}')
