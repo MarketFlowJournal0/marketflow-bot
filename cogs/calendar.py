@@ -51,7 +51,11 @@ async def fetch_calendar_events() -> list:
 
     cet = pytz.timezone('Europe/Paris')
     now = datetime.now(cet)
-    monday = now - timedelta(days=now.weekday())
+    # Si on est jeudi ou vendredi, prend la semaine prochaine
+    if now.weekday() >= 3:
+        monday = now + timedelta(days=(7 - now.weekday()))
+    else:
+        monday = now - timedelta(days=now.weekday())
     friday = monday + timedelta(days=4)
 
     url = 'https://fcsapi.com/api-v3/forex/economy_cal'
