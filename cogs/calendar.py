@@ -45,7 +45,6 @@ def get_week_dates():
     """Retourne monday et friday de la semaine à afficher"""
     cet = pytz.timezone('Europe/Paris')
     now = datetime.now(cet)
-    # Toujours prendre la semaine courante
     monday = now - timedelta(days=now.weekday())
     friday = monday + timedelta(days=4)
     return monday, friday
@@ -453,7 +452,7 @@ class Calendar(commands.Cog):
                     days_until_monday = 7
 
                 next_monday = now + timedelta(days=days_until_monday)
-                next_monday_midnight = next_monday.replace(hour=0, minute=0, second=0, microsecond=0)
+                next_monday_midnight = next_monday.replace(hour=8, minute=0, second=0, microsecond=0)
 
                 wait_seconds = (next_monday_midnight - now).total_seconds()
                 hours = int(wait_seconds // 3600)
