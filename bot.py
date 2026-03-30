@@ -28,7 +28,7 @@ async def on_ready():
         print(f'❌ Erreur sync : {e}')
 
 async def load_cogs():
-    cogs = ['cogs.verification', 'cogs.rules', 'cogs.calendar', 'cogs.moderation', 'cogs.tickets']
+    cogs = ['cogs.verification', 'cogs.rules', 'cogs.calendar', 'cogs.moderation', 'cogs.tickets', 'cogs.financialjuice']
     for cog in cogs:
         try:
             await bot.load_extension(cog)
