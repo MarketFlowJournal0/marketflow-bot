@@ -132,7 +132,7 @@ async def fetch_fj_rss() -> list:
             async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                 if resp.status == 200:
                     text = await resp.text()
-                    soup = BeautifulSoup(text, 'lxml-xml')
+                    soup = BeautifulSoup(text, 'html.parser')
                     items = soup.find_all('item')
 
                     news = []
