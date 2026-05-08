@@ -138,7 +138,7 @@ async def fetch_fj_rss() -> list:
                     news = []
                     for item in items:
                         title_tag = item.find('title')
-                        date_tag = item.find('pubDate')
+                        date_tag = item.find('pubdate') or item.find('pubDate')
                         guid_tag = item.find('guid')
 
                         if not title_tag:
