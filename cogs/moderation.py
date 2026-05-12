@@ -10,6 +10,9 @@ def is_owner(user_id: int) -> bool:
 def is_staff(member: discord.Member) -> bool:
     return is_owner(member.id) or any(r.name == 'MFJ Teams' for r in member.roles)
 
+# Salons où les liens sont autorisés
+ALLOWED_LINK_CHANNELS = ['general-en', 'general-fr', 'trading-ideas', 'analyses']
+
 class Moderation(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -33,6 +36,10 @@ class Moderation(commands.Cog):
         if message.author.guild_permissions.administrator:
             return
         if is_staff(message.author):
+            return
+
+        # Autorise les liens dans les salons communauté
+        if any(name in message.channel.name for name in ALLOWED_LINK_CHANNELS):
             return
 
         blocked_keywords = ['http://', 'https://', 'discord.gg/']
